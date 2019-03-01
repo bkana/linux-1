@@ -85,6 +85,15 @@
 		>;
 	};
 
+	spi0_pins_s0: spi0_pins_s0 {
+                pinctrl-single,pins = <
+                  0x150 0x30  /* spi0_sclk, INPUT_PULLUP | MODE0 */
+                  0x154 0x30  /* spi0_d0, INPUT_PULLUP | MODE0 */
+                  0x158 0x10  /* spi0_d1, OUTPUT_PULLUP | MODE0 */
+                  0x15c 0x10  /* spi0_cs0, OUTPUT_PULLUP | MODE0 */
+                >;
+            };
+
 	uart0_pins: pinmux_uart0_pins {
 		pinctrl-single,pins = <
 			AM33XX_IOPAD(0x970, PIN_INPUT_PULLUP | MUX_MODE0)	/* uart0_rxd.uart0_rxd */
@@ -240,6 +249,19 @@
 			reg = <0 0x100>;
 		};
 	};
+};
+
+&spi0 {
+    status = "okay";
+    id = <0>;
+    pinctrl-names = "default";
+    pinctrl-0 = <&spi0_pins_s0>;
+
+    spidev@0 {
+        spi-max-frequency = <24000000>;
+        reg = <0>;
+        compatible = "linux,spidev";
+    };
 };
 
 /include/ "tps65217.dtsi"
