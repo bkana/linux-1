@@ -27,6 +27,7 @@
 #include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
+#include <uapi/linux/sched/types.h>
 #include <linux/init.h>
 #include <linux/signal.h>
 #include <linux/completion.h>
@@ -1860,6 +1861,11 @@ static struct worker *create_worker(struct worker_pool *pool)
 					      "kworker/%s", id_buf);
 	if (IS_ERR(worker->task))
 		goto fail;
+
+	if (!IS_ERR(worker->task)){
+		static const struct sched_param param = { .sched_priority = 10 };
+		sched_setscheduler_nocheck(worker->task, SCHED_FIFO, &param);	
+	}
 
 	set_user_nice(worker->task, pool->attrs->nice);
 	kthread_bind_mask(worker->task, pool->attrs->cpumask);
