@@ -403,6 +403,15 @@ config GPIO_OMAP
 	select GPIOLIB_IRQCHIP
 	help
 	  Say yes here to enable GPIO support for TI OMAP SoCs.
+	  
+config GPIO_LEUZE
+	tristate "Leuze GPIO Interrupt support" if ARCH_OMAP2PLUS || COMPILE_TEST
+	default y if ARCH_OMAP
+	depends on ARM
+	select GENERIC_IRQ_CHIP
+	select GPIOLIB_IRQCHIP
+	help
+	  Say yes here to enable GPIO Interrupt support for Leuze.
 
 config GPIO_PL061
 	bool "PrimeCell PL061 GPIO support"
