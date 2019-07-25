@@ -1,0 +1,89 @@
+--- kernel/sched/core.c
++++ kernel/sched/core.c
+@@ -977,10 +1042,10 @@ static inline bool is_per_cpu_kthread(struct task_struct *p)
+  */
+ static inline bool is_cpu_allowed(struct task_struct *p, int cpu)
+ {
+-	if (!cpumask_test_cpu(cpu, &p->cpus_allowed))
++	if (!cpumask_test_cpu(cpu, p->cpus_ptr))
+ 		return false;
+ 
+-	if (is_per_cpu_kthread(p))
++	if (is_per_cpu_kthread(p) || __migrate_disabled(p))
+ 		return cpu_online(cpu);
+ 
+ 	return cpu_active(cpu);
+@@ -1607,14 +1714,14 @@ static int select_fallback_rq(int cpu, struct task_struct *p)
+ 		for_each_cpu(dest_cpu, nodemask) {
+ 			if (!cpu_active(dest_cpu))
+ 				continue;
+-			if (cpumask_test_cpu(dest_cpu, &p->cpus_allowed))
++			if (cpumask_test_cpu(dest_cpu, p->cpus_ptr))
+ 				return dest_cpu;
+ 		}
+ 	}
+ 
+ 	for (;;) {
+ 		/* Any allowed, online CPU? */
+-		for_each_cpu(dest_cpu, &p->cpus_allowed) {
++		for_each_cpu(dest_cpu, p->cpus_ptr) {
+ 			if (!is_cpu_allowed(p, dest_cpu))
+ 				continue;
+ 
+@@ -2214,56 +2336,6 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
+ 	return success;
+ }
+ 
+-/**
+- * try_to_wake_up_local - try to wake up a local task with rq lock held
+- * @p: the thread to be awakened
+- * @rf: request-queue flags for pinning
+- *
+- * Put @p on the run-queue if it's not already there. The caller must
+- * ensure that this_rq() is locked, @p is bound to this_rq() and not
+- * the current task.
+- */
+-static void try_to_wake_up_local(struct task_struct *p, struct rq_flags *rf)
+-{
+-	struct rq *rq = task_rq(p);
+-
+-	if (WARN_ON_ONCE(rq != this_rq()) ||
+-	    WARN_ON_ONCE(p == current))
+-		return;
+-
+-	lockdep_assert_held(&rq->lock);
+-
+-	if (!raw_spin_trylock(&p->pi_lock)) {
+-		/*
+-		 * This is OK, because current is on_cpu, which avoids it being
+-		 * picked for load-balance and preemption/IRQs are still
+-		 * disabled avoiding further scheduler activity on it and we've
+-		 * not yet picked a replacement task.
+-		 */
+-		rq_unlock(rq, rf);
+-		raw_spin_lock(&p->pi_lock);
+-		rq_relock(rq, rf);
+-	}
+-
+-	if (!(p->state & TASK_NORMAL))
+-		goto out;
+-
+-	trace_sched_waking(p);
+-
+-	if (!task_on_rq_queued(p)) {
+-		if (p->in_iowait) {
+-			delayacct_blkio_end(p);
+-			atomic_dec(&rq->nr_iowait);
+-		}
+-		ttwu_activate(rq, p, ENQUEUE_WAKEUP | ENQUEUE_NOCLOCK);
+-	}
+-
+-	ttwu_do_wakeup(rq, p, 0, rf);
+-	ttwu_stat(p, smp_processor_id(), 0);
+-out:
+-	raw_spin_unlock(&p->pi_lock);
+-}
+-
+ /**
+  * wake_up_process - Wake up a specific process
+  * @p: The process to be woken up.

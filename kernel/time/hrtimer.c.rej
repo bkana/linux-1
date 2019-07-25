@@ -1,0 +1,125 @@
+--- kernel/time/hrtimer.c
++++ kernel/time/hrtimer.c
+@@ -643,83 +705,38 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
+ 	 * set. So we'd effectivly block all timers until the T2 event
+ 	 * fires.
+ 	 */
+-	if (cpu_base->hang_detected)
++	if (!__hrtimer_hres_active(cpu_base) || cpu_base->hang_detected)
+ 		return;
+ 
+ 	tick_program_event(cpu_base->expires_next, 1);
+ }
+ 
++/* High resolution timer related functions */
++#ifdef CONFIG_HIGH_RES_TIMERS
++
+ /*
+- * When a timer is enqueued and expires earlier than the already enqueued
+- * timers, we have to check, whether it expires earlier than the timer for
+- * which the clock event device was armed.
+- *
+- * Called with interrupts disabled and base->cpu_base.lock held
++ * High resolution timer enabled ?
+  */
+-static void hrtimer_reprogram(struct hrtimer *timer,
+-			      struct hrtimer_clock_base *base)
+-{
+-	struct hrtimer_cpu_base *cpu_base = this_cpu_ptr(&hrtimer_bases);
+-	ktime_t expires = ktime_sub(hrtimer_get_expires(timer), base->offset);
+-
+-	WARN_ON_ONCE(hrtimer_get_expires_tv64(timer) < 0);
+-
+-	/*
+-	 * If the timer is not on the current cpu, we cannot reprogram
+-	 * the other cpus clock event device.
+-	 */
+-	if (base->cpu_base != cpu_base)
+-		return;
+-
+-	/*
+-	 * If the hrtimer interrupt is running, then it will
+-	 * reevaluate the clock bases and reprogram the clock event
+-	 * device. The callbacks are always executed in hard interrupt
+-	 * context so we don't need an extra check for a running
+-	 * callback.
+-	 */
+-	if (cpu_base->in_hrtirq)
+-		return;
+-
+-	/*
+-	 * CLOCK_REALTIME timer might be requested with an absolute
+-	 * expiry time which is less than base->offset. Set it to 0.
+-	 */
+-	if (expires < 0)
+-		expires = 0;
+-
+-	if (expires >= cpu_base->expires_next)
+-		return;
+-
+-	/* Update the pointer to the next expiring timer */
+-	cpu_base->next_timer = timer;
+-
+-	/*
+-	 * If a hang was detected in the last timer interrupt then we
+-	 * do not schedule a timer which is earlier than the expiry
+-	 * which we enforced in the hang detection. We want the system
+-	 * to make progress.
+-	 */
+-	if (cpu_base->hang_detected)
+-		return;
++static bool hrtimer_hres_enabled __read_mostly  = true;
++unsigned int hrtimer_resolution __read_mostly = LOW_RES_NSEC;
++EXPORT_SYMBOL_GPL(hrtimer_resolution);
+ 
+-	/*
+-	 * Program the timer hardware. We enforce the expiry for
+-	 * events which are already in the past.
+-	 */
+-	cpu_base->expires_next = expires;
+-	tick_program_event(expires, 1);
++/*
++ * Enable / Disable high resolution mode
++ */
++static int __init setup_hrtimer_hres(char *str)
++{
++	return (kstrtobool(str, &hrtimer_hres_enabled) == 0);
+ }
+ 
++__setup("highres=", setup_hrtimer_hres);
++
+ /*
+- * Initialize the high resolution related parts of cpu_base
++ * hrtimer_high_res_enabled - query, if the highres mode is enabled
+  */
+-static inline void hrtimer_init_hres(struct hrtimer_cpu_base *base)
++static inline int hrtimer_is_hres_enabled(void)
+ {
+-	base->expires_next = KTIME_MAX;
+-	base->hang_detected = 0;
+-	base->hres_active = 0;
+-	base->next_timer = NULL;
++	return hrtimer_hres_enabled;
+ }
+ 
+ /*
+@@ -1937,9 +2231,17 @@ int hrtimers_prepare_cpu(unsigned int cpu)
+ 		timerqueue_init_head(&cpu_base->clock_base[i].active);
+ 	}
+ 
+-	cpu_base->active_bases = 0;
+ 	cpu_base->cpu = cpu;
+-	hrtimer_init_hres(cpu_base);
++	cpu_base->active_bases = 0;
++	cpu_base->hres_active = 0;
++	cpu_base->hang_detected = 0;
++	cpu_base->next_timer = NULL;
++	cpu_base->softirq_next_timer = NULL;
++	cpu_base->expires_next = KTIME_MAX;
++	cpu_base->softirq_expires_next = KTIME_MAX;
++#ifdef CONFIG_PREEMPT_RT_BASE
++	init_waitqueue_head(&cpu_base->wait);
++#endif
+ 	return 0;
+ }
+ 

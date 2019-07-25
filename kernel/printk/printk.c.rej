@@ -1,0 +1,36 @@
+--- kernel/printk/printk.c
++++ kernel/printk/printk.c
+@@ -1796,20 +1830,30 @@ asmlinkage int vprintk_emit(int facility, int level,
+ 
+ 	/* If called from the scheduler, we can not call up(). */
+ 	if (!in_sched) {
++		int may_trylock = 1;
++
++#ifdef CONFIG_PREEMPT_RT_FULL
++		/*
++		 * we can't take a sleeping lock with IRQs or preeption disabled
++		 * so we can't print in these contexts
++		 */
++		if (!(preempt_count() == 0 && !irqs_disabled()))
++			may_trylock = 0;
++#endif
+ 		/*
+ 		 * Disable preemption to avoid being preempted while holding
+ 		 * console_sem which would prevent anyone from printing to
+ 		 * console
+ 		 */
+-		preempt_disable();
++		migrate_disable();
+ 		/*
+ 		 * Try to acquire and then immediately release the console
+ 		 * semaphore.  The release will print out buffers and wake up
+ 		 * /dev/kmsg and syslog() users.
+ 		 */
+-		if (console_trylock())
++		if (may_trylock && console_trylock())
+ 			console_unlock();
+-		preempt_enable();
++		migrate_enable();
+ 	}
+ 
+ 	return printed_len;
