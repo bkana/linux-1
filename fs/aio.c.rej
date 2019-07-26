@@ -1,0 +1,10 @@
+--- fs/aio.c
++++ fs/aio.c
+@@ -119,6 +120,7 @@ struct kioctx {
+ 
+ 	struct rcu_head		free_rcu;
+ 	struct work_struct	free_work;	/* see free_ioctx() */
++	struct swork_event	free_swork;	/* see free_ioctx() */
+ 
+ 	/*
+ 	 * signals when all in-flight requests are done

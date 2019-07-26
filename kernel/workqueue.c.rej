@@ -1,0 +1,11 @@
+--- kernel/workqueue.c
++++ kernel/workqueue.c
+@@ -49,6 +49,8 @@
+ #include <linux/moduleparam.h>
+ #include <linux/uaccess.h>
+ #include <linux/nmi.h>
++#include <linux/locallock.h>
++#include <linux/delay.h>
+ 
+ #include "workqueue_internal.h"
+ 

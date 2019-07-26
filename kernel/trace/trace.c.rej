@@ -1,0 +1,25 @@
+--- kernel/trace/trace.c
++++ kernel/trace/trace.c
+@@ -3405,15 +3420,17 @@ static void print_func_help_header_irq(struct trace_buffer *buf, struct seq_file
+ 		   tgid ? tgid_space : space);
+ 	seq_printf(m, "#                          %s / _----=> need-resched\n",
+ 		   tgid ? tgid_space : space);
+-	seq_printf(m, "#                          %s| / _---=> hardirq/softirq\n",
++	seq_printf(m, "#                          %s| /  _----=> need-resched_lazy\n",
++		   tgid ? tgid_space : space);
++	seq_printf(m, "#                          %s|| / _---=> hardirq/softirq\n",
+ 		   tgid ? tgid_space : space);
+-	seq_printf(m, "#                          %s|| / _--=> preempt-depth\n",
++	seq_printf(m, "#                          %s||| / _--=> preempt-depth\n",
+ 		   tgid ? tgid_space : space);
+-	seq_printf(m, "#                          %s||| /     delay\n",
++	seq_printf(m, "#                          %s|||| /     delay\n",
+ 		   tgid ? tgid_space : space);
+-	seq_printf(m, "#           TASK-PID %sCPU#  ||||    TIMESTAMP  FUNCTION\n",
++	seq_printf(m, "#           TASK-PID %sCPU#  |||||    TIMESTAMP  FUNCTION\n",
+ 		   tgid ? "   TGID   " : space);
+-	seq_printf(m, "#              | |   %s  |   ||||       |         |\n",
++	seq_printf(m, "#              | |   %s  |   |||||       |         |\n",
+ 		   tgid ? "     |    " : space);
+ }
+ 
