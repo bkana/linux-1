@@ -22,7 +22,6 @@
 #include <linux/cpumask.h>
 #include <linux/irq_work.h>
 #include <linux/printk.h>
-#include <linux/console.h>
 
 #include "internal.h"
 
