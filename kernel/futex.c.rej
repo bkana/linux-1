@@ -1,0 +1,29 @@
+--- kernel/futex.c
++++ kernel/futex.c
+@@ -2905,7 +2934,7 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
+ 	 * before __rt_mutex_start_proxy_lock() is done.
+ 	 */
+ 	raw_spin_lock_irq(&q.pi_state->pi_mutex.wait_lock);
+-	spin_unlock(q.lock_ptr);
++	raw_spin_unlock(q.lock_ptr);
+ 	/*
+ 	 * __rt_mutex_start_proxy_lock() unconditionally enqueues the @rt_waiter
+ 	 * such that futex_unlock_pi() is guaranteed to observe the waiter when
+@@ -2926,7 +2955,7 @@ static int futex_lock_pi(u32 __user *uaddr, unsigned int flags,
+ 	ret = rt_mutex_wait_proxy_lock(&q.pi_state->pi_mutex, to, &rt_waiter);
+ 
+ cleanup:
+-	spin_lock(q.lock_ptr);
++	raw_spin_lock(q.lock_ptr);
+ 	/*
+ 	 * If we failed to acquire the lock (deadlock/signal/timeout), we must
+ 	 * first acquire the hb->lock before removing the lock from the
+@@ -3100,7 +3129,7 @@ static int futex_unlock_pi(u32 __user *uaddr, unsigned int flags)
+ 	 * owner.
+ 	 */
+ 	if ((ret = cmpxchg_futex_value_locked(&curval, uaddr, uval, 0))) {
+-		spin_unlock(&hb->lock);
++		raw_spin_unlock(&hb->lock);
+ 		switch (ret) {
+ 		case -EFAULT:
+ 			goto pi_faulted;

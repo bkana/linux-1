@@ -142,12 +142,14 @@ void of_populate_phandle_cache(void)
 
 	if (!phandles)
 		goto out;
+	raw_spin_unlock_irqrestore(&devtree_lock, flags);
 
 	cache_entries = roundup_pow_of_two(phandles);
 	phandle_cache_mask = cache_entries - 1;
 
 	phandle_cache = kcalloc(cache_entries, sizeof(*phandle_cache),
 				GFP_ATOMIC);
+	raw_spin_lock_irqsave(&devtree_lock, flags);
 	if (!phandle_cache)
 		goto out;
 
@@ -157,6 +159,7 @@ void of_populate_phandle_cache(void)
 
 out:
 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
+	kfree(shadow);
 }
 
 int of_free_phandle_cache(void)
