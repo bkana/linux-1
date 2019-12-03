@@ -45,6 +45,15 @@
 #include <asm/mach/arch.h>
 #include <asm/mach/irq.h>
 #include <asm/mach/time.h>
+#include <asm/io.h>
+
+#define INCT_CONTROL_BASE 0x48200000
+#define INTC_THRESHOLD	  0x0068
+
+
+extern unsigned long lew_local_irq_save(void);
+extern void lew_local_irq_restore(unsigned long flags);
+void __iomem *intc_threshold_mem;
 
 unsigned long irq_err_count;
 
@@ -83,7 +92,7 @@ asm_do_IRQ(unsigned int irq, struct pt_regs *regs)
 void __init init_IRQ(void)
 {
 	int ret;
-
+        intc_threshold_mem = ioremap(INCT_CONTROL_BASE+INTC_THRESHOLD, 4);
 	if (IS_ENABLED(CONFIG_OF) && !machine_desc->init_irq)
 		irqchip_init();
 	else
@@ -100,6 +109,20 @@ void __init init_IRQ(void)
 	}
 
 	uniphier_cache_init();
+}
+unsigned long lew_local_irq_save(void)
+{
+	unsigned long flags;
+	
+	flags = ioread32(intc_threshold_mem);
+	iowrite32(0x05, intc_threshold_mem);
+	
+	return flags;
+}
+
+void lew_local_irq_restore(unsigned long flags)
+{
+	iowrite32(flags, intc_threshold_mem);
 }
 
 #ifdef CONFIG_SPARSE_IRQ
