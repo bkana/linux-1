@@ -35,6 +35,8 @@
 
 #include <trace/events/timer.h>
 
+extern unsigned long lew_local_irq_save(void);
+extern void lew_local_irq_restore(unsigned long flags);
 /*
  * Per-CPU nohz control structure
  */
@@ -1136,7 +1138,9 @@ void tick_nohz_idle_exit(void)
 	bool idle_active, tick_stopped;
 	ktime_t now;
 
-	local_irq_disable();
+	//local_irq_disable();
+	lew_local_irq_save();
+        //lew_local_irq_restore(0xff);
 
 	WARN_ON_ONCE(!ts->inidle);
 	WARN_ON_ONCE(ts->timer_expires_base);
@@ -1154,7 +1158,7 @@ void tick_nohz_idle_exit(void)
 	if (tick_stopped)
 		__tick_nohz_idle_restart_tick(ts, now);
 
-	local_irq_enable();
+	lew_local_irq_restore(0xff);
 }
 
 /*
