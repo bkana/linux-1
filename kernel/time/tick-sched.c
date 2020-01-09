@@ -982,7 +982,8 @@ void tick_nohz_idle_enter(void)
 
 	lockdep_assert_irqs_enabled();
 
-	local_irq_disable();
+	//local_irq_disable();
+	lew_local_irq_save();
 
 	ts = this_cpu_ptr(&tick_cpu_sched);
 
@@ -991,7 +992,8 @@ void tick_nohz_idle_enter(void)
 	ts->inidle = 1;
 	tick_nohz_start_idle(ts);
 
-	local_irq_enable();
+	lew_local_irq_restore(0xff);
+        //local_irq_enable();
 }
 
 /**
