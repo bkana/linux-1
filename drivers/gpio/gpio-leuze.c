@@ -22,7 +22,7 @@
 #define IOCTL_ENABLE_SYSTIMER 1
 #define START_ADDR 0x48200280
 /* GPIO Port */
-static unsigned int gpioSync = 20;
+static unsigned int gpioSync = 47;
 static unsigned int irqNumber;
 
 //?? PATCH bkana@leuze.com : jitter optimization
@@ -144,7 +144,7 @@ static int __init leuze_init(void)
 	}
     
     mem = ioremap(START_ADDR, 4);
-    if((request_threaded_irq(irqNumber, (irq_handler_t)leuze_irq_handler, (irq_handler_t) leuze_irq_handler, IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "dsp_sync_input", NULL))){
+    if((request_threaded_irq(irqNumber, NULL, (irq_handler_t) leuze_irq_handler, IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "dsp_sync_input", NULL))){
     	printk(KERN_INFO "cannot register IRQ");
     	goto irq;
     }
@@ -181,8 +181,8 @@ static irq_handler_t leuze_irq_handler(unsigned int irq, void *dev_id,
 		iowrite32(1U << 4, mem);
 		send_sig_info(SIGLEUZE, &info, t);
 		//rcu_read_unlock();
-		return (irq_handler_t) IRQ_HANDLED;
-                //return (irq_handler_t) IRQ_WAKE_THREAD;
+		//return (irq_handler_t) IRQ_HANDLED;
+                return (irq_handler_t) IRQ_WAKE_THREAD;
 	}
 	else{
 		//rcu_read_unlock();
