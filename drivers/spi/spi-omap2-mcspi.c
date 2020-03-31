@@ -98,6 +98,8 @@
 #define OMAP2_MCSPI_WAKEUPENABLE_WKEN	BIT(0)
 
 /* We have 2 DMA channels per CS, one for RX and one for TX */
+extern unsigned long lew_local_irq_save(void);
+extern void lew_local_irq_restore(unsigned long flags);
 struct omap2_mcspi_dma {
 	struct dma_chan *dma_tx;
 	struct dma_chan *dma_rx;

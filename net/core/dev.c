@@ -164,6 +164,10 @@ static int call_netdevice_notifiers_info(unsigned long val,
 					 struct netdev_notifier_info *info);
 static struct napi_struct *napi_by_id(unsigned int napi_id);
 
+//?? PATCH bkana@leuze.de : jitter optimization
+extern unsigned long lew_local_irq_save(void);
+extern void lew_local_irq_restore(unsigned long flags);
+
 /*
  * The @dev_base_head list is protected by @dev_base_lock and the rtnl
  * semaphore.
@@ -2705,14 +2709,18 @@ static void __netif_reschedule(struct Qdisc *q)
 {
 	struct softnet_data *sd;
 	unsigned long flags;
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 
-	local_irq_save(flags);
 	sd = this_cpu_ptr(&softnet_data);
 	q->next_sched = NULL;
 	*sd->output_queue_tailp = q;
 	sd->output_queue_tailp = &q->next_sched;
 	raise_softirq_irqoff(NET_TX_SOFTIRQ);
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 	preempt_check_resched_rt();
 }
 
@@ -2771,11 +2779,15 @@ void __dev_kfree_skb_irq(struct sk_buff *skb, enum skb_free_reason reason)
 		return;
 	}
 	get_kfree_skb_cb(skb)->reason = reason;
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	skb->next = __this_cpu_read(softnet_data.completion_queue);
 	__this_cpu_write(softnet_data.completion_queue, skb);
 	raise_softirq_irqoff(NET_TX_SOFTIRQ);
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 	preempt_check_resched_rt();
 }
 EXPORT_SYMBOL(__dev_kfree_skb_irq);
@@ -4226,8 +4238,9 @@ static int enqueue_to_backlog(struct sk_buff *skb, int cpu,
 	unsigned int qlen;
 
 	sd = &per_cpu(softnet_data, cpu);
-
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 
 	rps_lock(sd);
 	if (!netif_running(skb->dev))
@@ -4239,7 +4252,9 @@ enqueue:
 			__skb_queue_tail(&sd->input_pkt_queue, skb);
 			input_queue_tail_incr_save(sd, qtail);
 			rps_unlock(sd);
-			local_irq_restore(flags);
+			//?? PATCH bkana@leuze.de : jitter optimization
+			lew_local_irq_restore(0xff);
+			//local_irq_restore(flags);
 			return NET_RX_SUCCESS;
 		}
 
@@ -4256,8 +4271,9 @@ enqueue:
 drop:
 	sd->dropped++;
 	rps_unlock(sd);
-
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 	preempt_check_resched_rt();
 
 	atomic_long_inc(&skb->dev->rx_dropped);
@@ -4536,11 +4552,14 @@ static __latent_entropy void net_tx_action(struct softirq_action *h)
 
 	if (sd->completion_queue) {
 		struct sk_buff *clist;
-
-		local_irq_disable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_save();
+		//local_irq_disable();
 		clist = sd->completion_queue;
 		sd->completion_queue = NULL;
-		local_irq_enable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_enable();
 
 		while (clist) {
 			struct sk_buff *skb = clist;
@@ -4564,12 +4583,15 @@ static __latent_entropy void net_tx_action(struct softirq_action *h)
 
 	if (sd->output_queue) {
 		struct Qdisc *head;
-
-		local_irq_disable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_save();
+		//local_irq_disable();
 		head = sd->output_queue;
 		sd->output_queue = NULL;
 		sd->output_queue_tailp = &sd->output_queue;
-		local_irq_enable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_enable();
 
 		while (head) {
 			struct Qdisc *q = head;
@@ -5249,7 +5271,9 @@ static void flush_backlog(struct work_struct *work)
 	local_bh_disable();
 	sd = this_cpu_ptr(&softnet_data);
 
-	local_irq_disable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	rps_lock(sd);
 	skb_queue_walk_safe(&sd->input_pkt_queue, skb, tmp) {
 		if (skb->dev->reg_state == NETREG_UNREGISTERING) {
@@ -5259,7 +5283,9 @@ static void flush_backlog(struct work_struct *work)
 		}
 	}
 	rps_unlock(sd);
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 
 	skb_queue_walk_safe(&sd->process_queue, skb, tmp) {
 		if (skb->dev->reg_state == NETREG_UNREGISTERING) {
@@ -5806,15 +5832,18 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
 
 	if (remsd) {
 		sd->rps_ipi_list = NULL;
-
-		local_irq_enable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_enable();
 		preempt_check_resched_rt();
 
 		/* Send pending IPI's to kick RPS processing on remote cpus. */
 		net_rps_send_ipi(remsd);
 	} else
 #endif
-		local_irq_enable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_enable();
 	preempt_check_resched_rt();
 }
 
@@ -5837,25 +5866,31 @@ static int process_backlog(struct napi_struct *napi, int quota)
 	 * not waiting net_rx_action() end.
 	 */
 	if (sd_has_rps_ipi_waiting(sd)) {
-		local_irq_disable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_save();
+		//local_irq_disable();
 		net_rps_action_and_irq_enable(sd);
 	}
 
 	napi->weight = dev_rx_weight;
 	while (again) {
 		struct sk_buff *skb;
-
-		local_irq_disable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_save();
+		//local_irq_disable();
 		while ((skb = __skb_dequeue(&sd->process_queue))) {
-			local_irq_enable();
+			//?? PATCH bkana@leuze.de : jitter optimization
+			lew_local_irq_restore(0xff);
+			//local_irq_enable();
 			rcu_read_lock();
 			__netif_receive_skb(skb);
 			rcu_read_unlock();
 			input_queue_head_incr(sd);
 			if (++work >= quota)
 				return work;
-
-			local_irq_disable();
+			//?? PATCH bkana@leuze.de : jitter optimization
+			lew_local_irq_save();
+			//local_irq_disable();
 		}
 
 		rps_lock(sd);
@@ -5875,7 +5910,9 @@ static int process_backlog(struct napi_struct *napi, int quota)
 						   &sd->process_queue);
 		}
 		rps_unlock(sd);
-		local_irq_enable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_enable();
 	}
 
 	return work;
@@ -5891,10 +5928,13 @@ static int process_backlog(struct napi_struct *napi, int quota)
 void __napi_schedule(struct napi_struct *n)
 {
 	unsigned long flags;
-
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	____napi_schedule(this_cpu_ptr(&softnet_data), n);
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 	preempt_check_resched_rt();
 }
 EXPORT_SYMBOL(__napi_schedule);
@@ -5974,9 +6014,13 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 	}
 	if (unlikely(!list_empty(&n->poll_list))) {
 		/* If n->poll_list is not empty, we need to mask irqs */
-		local_irq_save(flags);
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_save();
+		//local_irq_save(flags);
 		list_del_init(&n->poll_list);
-		local_irq_restore(flags);
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_restore(flags);
 	}
 
 	do {
@@ -6327,11 +6371,14 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
 	LIST_HEAD(repoll);
 
 	__skb_queue_head_init(&tofree_q);
-
-	local_irq_disable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	skb_queue_splice_init(&sd->tofree_queue, &tofree_q);
 	list_splice_init(&sd->poll_list, &list);
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 
 	while ((skb = __skb_dequeue(&tofree_q)))
 		kfree_skb(skb);
@@ -6358,8 +6405,9 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
 			break;
 		}
 	}
-
-	local_irq_disable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 
 	list_splice_tail_init(&sd->poll_list, &list);
 	list_splice_tail(&repoll, &list);
@@ -9269,7 +9317,9 @@ static int dev_cpu_dead(unsigned int oldcpu)
 	unsigned int cpu;
 	struct softnet_data *sd, *oldsd, *remsd = NULL;
 
-	local_irq_disable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	cpu = smp_processor_id();
 	sd = &per_cpu(softnet_data, cpu);
 	oldsd = &per_cpu(softnet_data, oldcpu);
@@ -9306,7 +9356,9 @@ static int dev_cpu_dead(unsigned int oldcpu)
 	}
 
 	raise_softirq_irqoff(NET_TX_SOFTIRQ);
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 	preempt_check_resched_rt();
 
 #ifdef CONFIG_RPS
