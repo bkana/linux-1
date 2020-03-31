@@ -35,8 +35,10 @@
 
 #include <trace/events/timer.h>
 
+//?? PATCH bkana@leuze.com : jitter optimization
 extern unsigned long lew_local_irq_save(void);
 extern void lew_local_irq_restore(unsigned long flags);
+
 /*
  * Per-CPU nohz control structure
  */
@@ -378,8 +380,10 @@ void __tick_nohz_task_switch(void)
 {
 	unsigned long flags;
 	struct tick_sched *ts;
+	//?? PATCH bkana@leuze.com : jitter optimization
+	//local_irq_save(flags);
+	lew_local_irq_save();
 
-	local_irq_save(flags);
 
 	if (!tick_nohz_full_cpu(smp_processor_id()))
 		goto out;
@@ -392,7 +396,9 @@ void __tick_nohz_task_switch(void)
 			tick_nohz_full_kick();
 	}
 out:
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.com : jitter optimization
+	//local_irq_restore(flags);
+	lew_local_irq_restore(0xff);
 }
 
 /* Get the boot-time nohz CPU list from the kernel parameters. */

@@ -9,6 +9,10 @@
 
 #include <trace/events/power.h>
 
+//?? PATCH bkana@leuze.de : jitter optimization
+extern unsigned long lew_local_irq_save(void);
+extern void lew_local_irq_restore(unsigned long flags);
+
 /* Linker adds these: start and end of __cpuidle functions */
 extern char __cpuidle_text_start[], __cpuidle_text_end[];
 
@@ -55,7 +59,9 @@ static noinline int __cpuidle cpu_idle_poll(void)
 {
 	rcu_idle_enter();
 	trace_cpu_idle_rcuidle(0, smp_processor_id());
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 	stop_critical_timings();
 
 	while (!tif_need_resched() &&
@@ -76,7 +82,9 @@ void __weak arch_cpu_idle_dead(void) { }
 void __weak arch_cpu_idle(void)
 {
 	cpu_idle_force_poll = 1;
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 }
 
 /**
@@ -87,7 +95,9 @@ void __weak arch_cpu_idle(void)
 void __cpuidle default_idle_call(void)
 {
 	if (current_clr_polling_and_test()) {
-		local_irq_enable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_enable();
 	} else {
 		stop_critical_timings();
 		arch_cpu_idle();
@@ -104,7 +114,9 @@ static int call_cpuidle(struct cpuidle_driver *drv, struct cpuidle_device *dev,
 	 */
 	if (current_clr_polling_and_test()) {
 		dev->last_residency = 0;
-		local_irq_enable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_enable();
 		return -EBUSY;
 	}
 
@@ -136,7 +148,9 @@ static void cpuidle_idle_call(void)
 	 * case, exit the function after re-enabling the local irq.
 	 */
 	if (need_resched()) {
-		local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+		//local_irq_enable();
 		return;
 	}
 
@@ -170,7 +184,9 @@ static void cpuidle_idle_call(void)
 
 			entered_state = cpuidle_enter_s2idle(drv, dev);
 			if (entered_state > 0) {
-				local_irq_enable();
+				//?? PATCH bkana@leuze.de : jitter optimization
+				lew_local_irq_restore(0xff);
+				//local_irq_enable();
 				goto exit_idle;
 			}
 

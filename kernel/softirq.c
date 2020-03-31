@@ -51,6 +51,10 @@
    - Tasklets: serialized wrt itself.
  */
 
+//?? PATCH bkana@leuze.de : jitter optimization
+extern unsigned long lew_local_irq_save(void);
+extern void lew_local_irq_restore(unsigned long flags);
+
 #ifndef __ARCH_IRQ_STAT
 DEFINE_PER_CPU_ALIGNED(irq_cpustat_t, irq_stat);
 EXPORT_PER_CPU_SYMBOL(irq_stat);
@@ -254,14 +258,20 @@ static void handle_pending_softirqs(u32 pending)
 
 static void run_ksoftirqd(unsigned int cpu)
 {
-	local_irq_disable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	if (ksoftirqd_softirq_pending()) {
 		__do_softirq();
-		local_irq_enable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_enable();
 		cond_resched();
 		return;
 	}
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 }
 
 /*
@@ -542,9 +552,13 @@ static void do_single_softirq(int which)
 	vtime_account_irq_enter(current);
 	current->flags |= PF_IN_SOFTIRQ;
 	lockdep_softirq_enter();
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 	handle_softirq(which);
-	local_irq_disable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	lockdep_softirq_exit();
 	current->flags &= ~PF_IN_SOFTIRQ;
 	vtime_account_irq_enter(current);
@@ -570,7 +584,9 @@ static void do_current_softirqs(void)
 		 * now.
 		 */
 		lock_softirq(i);
-		local_irq_disable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_save();
+		//local_irq_disable();
 		softirq_set_runner(i);
 		/*
 		 * Check with the local_softirq_pending() bits,
@@ -584,9 +600,13 @@ static void do_current_softirqs(void)
 		}
 		softirq_clr_runner(i);
 		WARN_ON(current->softirq_nestcnt != 1);
-		local_irq_enable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_enable();
 		unlock_softirq(i);
-		local_irq_disable();
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_save();
+		//local_irq_disable();
 	}
 }
 
@@ -601,11 +621,14 @@ void __local_bh_enable(void)
 {
 	if (WARN_ON(current->softirq_nestcnt == 0))
 		return;
-
-	local_irq_disable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	if (current->softirq_nestcnt == 1 && current->softirqs_raised)
 		do_current_softirqs();
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 
 	if (--current->softirq_nestcnt == 0)
 		migrate_enable();
@@ -630,12 +653,16 @@ EXPORT_SYMBOL(in_serving_softirq);
 /* Called with preemption disabled */
 static void run_ksoftirqd(unsigned int cpu)
 {
-	local_irq_disable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	current->softirq_nestcnt++;
 
 	do_current_softirqs();
 	current->softirq_nestcnt--;
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 	cond_resched();
 }
 
@@ -829,14 +856,18 @@ static inline void invoke_softirq(void)
 #else /* PREEMPT_RT_FULL */
 	unsigned long flags;
 
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	if (__this_cpu_read(ksoftirqd) &&
 			__this_cpu_read(ksoftirqd)->softirqs_raised)
 		wakeup_softirqd();
 	if (__this_cpu_read(ktimer_softirqd) &&
 			__this_cpu_read(ktimer_softirqd)->softirqs_raised)
 		wakeup_timer_softirqd();
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 #endif
 }
 
@@ -859,7 +890,9 @@ static inline void tick_irq_exit(void)
 void irq_exit(void)
 {
 #ifndef __ARCH_IRQ_EXIT_IRQS_DISABLED
-	local_irq_disable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 #else
 	lockdep_assert_irqs_disabled();
 #endif
@@ -876,10 +909,13 @@ void irq_exit(void)
 void raise_softirq(unsigned int nr)
 {
 	unsigned long flags;
-
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	raise_softirq_irqoff(nr);
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 }
 
 void open_softirq(int nr, void (*action)(struct softirq_action *))
@@ -904,10 +940,13 @@ static void __tasklet_schedule_common(struct tasklet_struct *t,
 {
 	struct tasklet_head *head;
 	unsigned long flags;
-
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	if (!tasklet_trylock(t)) {
-		local_irq_restore(flags);
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_restore(flags);
 		return;
 	}
 
@@ -938,7 +977,9 @@ again:
 		if (!tasklet_tryunlock(t))
 			goto again;
 	}
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 }
 
 void __tasklet_schedule(struct tasklet_struct *t)
@@ -970,12 +1011,16 @@ static void tasklet_action_common(struct softirq_action *a,
 {
 	struct tasklet_struct *list;
 	int loops = 1000000;
-
-	local_irq_disable();
+	
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	list = tl_head->head;
 	tl_head->head = NULL;
 	tl_head->tail = &tl_head->head;
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 
 	while (list) {
 		struct tasklet_struct *t = list;
@@ -1194,7 +1239,9 @@ void tasklet_kill_immediate(struct tasklet_struct *t, unsigned int cpu)
 static int takeover_tasklets(unsigned int cpu)
 {
 	/* CPU is dead, so no lock needed. */
-	local_irq_disable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 
 	/* Find end, append list for that CPU. */
 	if (&per_cpu(tasklet_vec, cpu).head != per_cpu(tasklet_vec, cpu).tail) {
@@ -1213,7 +1260,9 @@ static int takeover_tasklets(unsigned int cpu)
 	}
 	raise_softirq_irqoff(HI_SOFTIRQ);
 
-	local_irq_enable();
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 	return 0;
 }
 #else

@@ -177,6 +177,10 @@ static void rcu_report_exp_rdp(struct rcu_state *rsp,
 			       struct rcu_data *rdp, bool wake);
 static void sync_sched_exp_online_cleanup(int cpu);
 
+//?? PATCH bkana@leuze.de : jitter optimization
+extern unsigned long lew_local_irq_save(void);
+extern void lew_local_irq_restore(unsigned long flags);
+
 /* rcuc/rcub kthread realtime priority */
 static int kthread_prio = IS_ENABLED(CONFIG_RCU_BOOST) ? 1 : 0;
 module_param(kthread_prio, int, 0644);
@@ -259,9 +263,13 @@ void rcu_bh_qs(void)
 	unsigned long flags;
 
 	/* Callers to this function, rcu_preempt_qs(), must disable irqs. */
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	rcu_preempt_qs();
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 }
 #else
 void rcu_bh_qs(void)
@@ -499,9 +507,13 @@ void rcu_all_qs(void)
 	this_cpu_write(rcu_dynticks.rcu_urgent_qs, false);
 	barrier(); /* Avoid RCU read-side critical sections leaking down. */
 	if (unlikely(raw_cpu_read(rcu_dynticks.rcu_need_heavy_qs))) {
-		local_irq_save(flags);
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_save();
+		//local_irq_save(flags);
 		rcu_momentary_dyntick_idle();
-		local_irq_restore(flags);
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_restore(flags);
 	}
 	if (unlikely(raw_cpu_read(rcu_sched_data.cpu_no_qs.b.exp)))
 		rcu_sched_qs();
@@ -883,10 +895,13 @@ void rcu_irq_exit(void)
 void rcu_irq_exit_irqson(void)
 {
 	unsigned long flags;
-
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	rcu_irq_exit();
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 }
 
 /*
@@ -931,10 +946,13 @@ static void rcu_eqs_exit(bool user)
 void rcu_idle_exit(void)
 {
 	unsigned long flags;
-
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	rcu_eqs_exit(false);
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 }
 
 #ifdef CONFIG_NO_HZ_FULL
@@ -1037,9 +1055,13 @@ void rcu_irq_enter_irqson(void)
 {
 	unsigned long flags;
 
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	rcu_irq_enter();
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 }
 
 /**
@@ -1895,7 +1917,6 @@ static void note_gp_changes(struct rcu_state *rsp, struct rcu_data *rdp)
 	unsigned long flags;
 	bool needwake;
 	struct rcu_node *rnp;
-
 	local_irq_save(flags);
 	rnp = rdp->mynode;
 	if ((rdp->gp_seq == rcu_seq_current(&rnp->gp_seq) &&
@@ -2595,13 +2616,19 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
 	 * races with call_rcu() from interrupt handlers.  Leave the
 	 * callback counts, as rcu_barrier() needs to be conservative.
 	 */
-	local_irq_save(flags);
+
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	WARN_ON_ONCE(cpu_is_offline(smp_processor_id()));
 	bl = rdp->blimit;
 	trace_rcu_batch_start(rsp->name, rcu_segcblist_n_lazy_cbs(&rdp->cblist),
 			      rcu_segcblist_n_cbs(&rdp->cblist), bl);
 	rcu_segcblist_extract_done_cbs(&rdp->cblist, &rcl);
-	local_irq_restore(flags);
+	
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 
 	/* Invoke callbacks. */
 	rhp = rcu_cblist_dequeue(&rcl);
@@ -2618,8 +2645,10 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
 		     (!is_idle_task(current) && !rcu_is_callbacks_kthread())))
 			break;
 	}
-
-	local_irq_save(flags);
+	
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	count = -rcl.len;
 	trace_rcu_batch_end(rsp->name, count, !!rcl.head, need_resched(),
 			    is_idle_task(current), rcu_is_callbacks_kthread());
@@ -2647,7 +2676,9 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
 	 */
 	WARN_ON_ONCE(rcu_segcblist_empty(&rdp->cblist) != (count == 0));
 
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 
 	/* Re-invoke RCU core processing if there are callbacks remaining. */
 	if (rcu_segcblist_ready_cbs(&rdp->cblist))
@@ -2868,10 +2899,14 @@ __rcu_process_callbacks(struct rcu_state *rsp)
 	/* No grace period and unregistered callbacks? */
 	if (!rcu_gp_in_progress(rsp) &&
 	    rcu_segcblist_is_enabled(&rdp->cblist)) {
-		local_irq_save(flags);
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_save();
+		//local_irq_save(flags);
 		if (!rcu_segcblist_restempty(&rdp->cblist, RCU_NEXT_READY_TAIL))
 			rcu_accelerate_cbs_unlocked(rsp, rnp, rdp);
-		local_irq_restore(flags);
+		//?? PATCH bkana@leuze.de : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_restore(flags);
 	}
 
 	rcu_check_gp_start_stall(rsp, rnp, rdp);
@@ -2932,12 +2967,16 @@ static void invoke_rcu_core(void)
 
 	if (!cpu_online(smp_processor_id()))
 		return;
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	__this_cpu_write(rcu_cpu_has_work, 1);
 	t = __this_cpu_read(rcu_cpu_kthread_task);
 	if (t != NULL && current != t)
 		rcu_wake_cond(t, __this_cpu_read(rcu_cpu_kthread_status));
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.de : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 }
 
 static void rcu_cpu_kthread_park(unsigned int cpu)

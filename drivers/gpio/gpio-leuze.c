@@ -19,10 +19,15 @@
 #define SIGLEUZE 44
 #define REG_CURRENT_TASK _IOW('a','a', int32_t* )
 #define IOCTL_SET_VARIABLES 0
-#define START_ADDR 0x48200270
+#define IOCTL_ENABLE_SYSTIMER 1
+#define START_ADDR 0x48200280
 /* GPIO Port */
 static unsigned int gpioSync = 20;
 static unsigned int irqNumber;
+
+//?? PATCH bkana@leuze.com : jitter optimization
+extern unsigned long lew_local_irq_save(void);
+extern void lew_local_irq_restore(unsigned long flags);
 
 /* Signaling to Application */
 static struct task_struct *task = NULL;
@@ -89,8 +94,12 @@ static long leuze_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			  pid = args.pid;
 			  t = pid_task(find_pid_ns(pid, &init_pid_ns), PIDTYPE_PID);
 				// find the task with that pid
+			lew_local_irq_save();
 
 			break;
+		case IOCTL_ENABLE_SYSTIMER:
+			lew_local_irq_restore(0xff);
+ 			break;
 		default:
 			break;
 	}
@@ -100,8 +109,6 @@ static long leuze_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 static int __init leuze_init(void)
 {
-	int result = 0;
-
 	gpio_request(gpioSync, "sysfs");	/* Set up the gpioSync */
 	gpio_direction_input(gpioSync);
 	gpio_export(gpioSync, false);
@@ -137,7 +144,7 @@ static int __init leuze_init(void)
 	}
     
     mem = ioremap(START_ADDR, 4);
-    if((request_irq(irqNumber, (irq_handler_t) leuze_irq_handler, IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "dsp_sync_input", NULL))){
+    if((request_threaded_irq(irqNumber, (irq_handler_t)leuze_irq_handler, (irq_handler_t) leuze_irq_handler, IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "dsp_sync_input", NULL))){
     	printk(KERN_INFO "cannot register IRQ");
     	goto irq;
     }
@@ -167,18 +174,18 @@ static void __exit leuze_exit(void)
 static irq_handler_t leuze_irq_handler(unsigned int irq, void *dev_id,
 					  struct pt_regs *regs)
 {
-	//send_sig_info(SIGLEUZE, &info, t);
+	lew_local_irq_save();
+	//rcu_read_lock();
 	if(t != NULL){
-		if(&info)
-		{
                tick_period = 100000000; //set period to 100 ms
 		iowrite32(1U << 4, mem);
 		send_sig_info(SIGLEUZE, &info, t);
+		//rcu_read_unlock();
 		return (irq_handler_t) IRQ_HANDLED;
-		}
+                //return (irq_handler_t) IRQ_WAKE_THREAD;
 	}
 	else{
-		//printk(KERN_INFO "pid_task error  T = %d \n", t);
+		//rcu_read_unlock();
 		return (irq_handler_t) IRQ_NONE;
 	}
 }

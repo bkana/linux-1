@@ -50,6 +50,11 @@ const_debug unsigned int sysctl_sched_nr_migrate = 8;
 const_debug unsigned int sysctl_sched_nr_migrate = 32;
 #endif
 
+//?? PATCH bkana@leuze.com : jitter optimization
+extern unsigned long lew_local_irq_save(void);
+extern void lew_local_irq_restore(unsigned long flags);
+
+
 /*
  * period over which we measure -rt task CPU usage in us.
  * default: 1s
@@ -1034,7 +1039,9 @@ static int migration_cpu_stop(void *data)
 	 * The original target CPU might have gone down and we might
 	 * be on another CPU but it doesn't matter.
 	 */
-	local_irq_disable();
+	//?? PATCH bkana@leuze.com : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	/*
 	 * We need to explicitly wake pending tasks before running
 	 * __migrate_task() such that we will not miss enforcing cpus_ptr
@@ -1057,8 +1064,9 @@ static int migration_cpu_stop(void *data)
 	}
 	rq_unlock(rq, &rf);
 	raw_spin_unlock(&p->pi_lock);
-
-	local_irq_enable();
+	//?? PATCH bkana@leuze.com : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_enable();
 	return 0;
 }
 
@@ -3479,8 +3487,9 @@ static void __sched notrace __schedule(bool preempt)
 
 	if (sched_feat(HRTICK))
 		hrtick_clear(rq);
-
-	local_irq_disable();
+	//?? PATCH bkana@leuze.com : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	rcu_note_context_switch(preempt);
 
 	/*
@@ -3818,9 +3827,13 @@ asmlinkage __visible void __sched preempt_schedule_irq(void)
 
 	do {
 		preempt_disable();
-		local_irq_enable();
+		//?? PATCH bkana@leuze.com : jitter optimization
+		lew_local_irq_save();
+		//local_irq_enable();
 		__schedule(true);
-		local_irq_disable();
+		//?? PATCH bkana@leuze.com : jitter optimization
+		lew_local_irq_restore(0xff);
+		//local_irq_disable();
 		sched_preempt_enable_no_resched();
 	} while (need_resched());
 
@@ -5053,8 +5066,9 @@ static void do_sched_yield(void)
 {
 	struct rq_flags rf;
 	struct rq *rq;
-
-	local_irq_disable();
+	//?? PATCH bkana@leuze.com : jitter optimization
+	lew_local_irq_save();
+	//local_irq_disable();
 	rq = this_rq();
 	rq_lock(rq, &rf);
 
@@ -5169,8 +5183,9 @@ int __sched yield_to(struct task_struct *p, bool preempt)
 	struct rq *rq, *p_rq;
 	unsigned long flags;
 	int yielded = 0;
-
-	local_irq_save(flags);
+	//?? PATCH bkana@leuze.com : jitter optimization
+	lew_local_irq_save();
+	//local_irq_save(flags);
 	rq = this_rq();
 
 again:
@@ -5213,7 +5228,9 @@ again:
 out_unlock:
 	double_rq_unlock(rq, p_rq);
 out_irq:
-	local_irq_restore(flags);
+	//?? PATCH bkana@leuze.com : jitter optimization
+	lew_local_irq_restore(0xff);
+	//local_irq_restore(flags);
 
 	if (yielded > 0)
 		schedule();
