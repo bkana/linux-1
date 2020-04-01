@@ -992,8 +992,6 @@ static irqreturn_t irq_thread_fn(struct irq_desc *desc,
 		struct irqaction *action)
 {
 	irqreturn_t ret;
-	//?? PATCH bkana@leuze.de : jitter optimization
-	lew_local_irq_save();
 	ret = action->thread_fn(action->irq, action->dev_id);
 	irq_finalize_oneshot(desc, action);
 	return ret;
@@ -1068,8 +1066,6 @@ static int irq_thread(void *data)
 
 	while (!irq_wait_for_interrupt(action)) {
 		irqreturn_t action_ret;
-		//?? PATCH bkana@leuze.de : jitter optimization
-		lew_local_irq_save();
 		irq_thread_check_affinity(desc, action);
 
 		action_ret = handler_fn(desc, action);
@@ -1078,8 +1074,6 @@ static int irq_thread(void *data)
 		}
 		if (action_ret == IRQ_WAKE_THREAD){
 			irq_wake_secondary(desc, action);
-			//?? PATCH bkana@leuze.de : jitter optimization
-			lew_local_irq_restore(0xff);
 		}
 
 #ifdef CONFIG_PREEMPT_RT_FULL

@@ -108,10 +108,6 @@ extern void init_IRQ(void);
 extern void fork_init(void);
 extern void radix_tree_init(void);
 
-//?? PATCH bkana@leuze.de : jitter optimization
-extern unsigned long lew_local_irq_save(void);
-extern void lew_local_irq_restore(unsigned long flags);
-
 /*
  * Debug helper: via this flag we know that we are in 'early bootup code'
  * where only the boot processor is running with IRQ disabled.  This means
@@ -542,12 +538,10 @@ asmlinkage __visible void __init start_kernel(void)
 	debug_objects_early_init();
 
 	cgroup_init_early();
-	//?? PATCH bkana@leuze.de : jitter optimization
-	//lew_local_irq_save();
+
 	local_irq_disable();
-	//?? PATCH bkana@leuze.de : jitter optimization
-	//early_boot_irqs_disabled = true;
-	early_boot_irqs_disabled = false;
+	early_boot_irqs_disabled = true;
+	//early_boot_irqs_disabled = false;
 	/*
 	 * Interrupts are still disabled. Do necessary setups, then
 	 * enable them.
@@ -614,9 +608,7 @@ asmlinkage __visible void __init start_kernel(void)
 	preempt_disable();
 	if (WARN(!irqs_disabled(),
 		 "Interrupts were enabled *very* early, fixing it\n"))
-	//?? PATCH bkana@leuze.de : jitter optimization
-		lew_local_irq_save();
-		//local_irq_disable();
+		  local_irq_disable();
 	radix_tree_init();
 
 	/*
@@ -658,9 +650,8 @@ asmlinkage __visible void __init start_kernel(void)
 	WARN(!irqs_disabled(), "Interrupts were enabled early\n");
 
 	early_boot_irqs_disabled = false;
-	//?? PATCH bkana@leuze.de : jitter optimization
-	lew_local_irq_restore(0xff);
-	//local_irq_enable();
+
+	local_irq_enable();
 
 	kmem_cache_init_late();
 
@@ -904,9 +895,7 @@ int __init_or_module do_one_initcall(initcall_t fn)
 	}
 	if (irqs_disabled()) {
 		strlcat(msgbuf, "disabled interrupts ", sizeof(msgbuf));
-		//?? PATCH bkana@leuze.de : jitter optimization
-		lew_local_irq_restore(0xff);
-		//local_irq_enable();
+		local_irq_enable();
 	}
 	WARN(msgbuf[0], "initcall %pF returned with %s\n", fn, msgbuf);
 
