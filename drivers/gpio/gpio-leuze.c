@@ -20,7 +20,7 @@
 #define REG_CURRENT_TASK _IOW('a','a', int32_t* )
 #define IOCTL_SET_VARIABLES 0
 #define IOCTL_ENABLE_SYSTIMER 1
-#define START_ADDR 0x48200280
+#define START_ADDR 0x48200288
 /* GPIO Port */
 static unsigned int gpioSync = 47;
 static unsigned int irqNumber;
